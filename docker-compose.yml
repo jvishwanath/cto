@@ -1,0 +1,96 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: cto-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: rag
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  # Arize Phoenix: single-container OTel collector + trace UI.
+  # SQLite by default (persisted to ./data/phoenix). UI on :6006,
+  # OTLP gRPC on :4317, OTLP HTTP on :6006/v1/traces.
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    volumes:
+      - ./data/phoenix:/mnt/data
+
+  # FastAPI server + Gradio UI + watcher + Confluence scheduler.
+  # Reranker model lives in the mounted /hf-cache (NOT baked into
+  # the image — pre-download once with `make prewarm-reranker`).
+  app:
+    build:
+      context: .
+      args:
+        CA_CERT: ${CA_CERT:-}
+    image: cto-app:latest
+    depends_on:
+      - qdrant
+      - postgres
+      - phoenix
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      POSTGRES_DSN: postgresql://rag:rag@postgres:5432/rag
+      PHOENIX_HOST: http://phoenix:6006
+      HF_HOME: /hf-cache
+      SENTENCE_TRANSFORMERS_HOME: /hf-cache/sentence-transformers
+      WATCHER_ENABLED: ${WATCHER_ENABLED:-true}
+      CONFLUENCE_ENABLED: ${CONFLUENCE_ENABLED:-true}
+      UI_ENABLED: "true"
+    volumes:
+      - ./data:/app/data
+      - ./hf-cache:/hf-cache
+    restart: unless-stopped
+
+  # ── OIDC front door (opt-in: `docker compose --profile oidc up`) ──
+  # Sits in front of `app`, authenticates via Okta/Azure/Google/etc,
+  # injects X-Forwarded-User. With this enabled:
+  #   - DROP the host port mapping on `app` above (only the proxy is public)
+  #   - set CTO_TRUST_FORWARDED_USER=true in app's environment
+  #   - leave CTO_API_KEYS set if the CLI should still bypass via Bearer
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    profiles: ["oidc"]
+    depends_on: [app]
+    ports:
+      - "8080:4180"
+    environment:
+      # REQUIRED when running with --profile oidc — set these in .env:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OAUTH2_PROXY_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_COOKIE_SECRET:-}
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OIDC_EMAIL_DOMAINS:-*}
+      OAUTH2_PROXY_REDIRECT_URL: ${OIDC_REDIRECT_URL:-http://localhost:8080/oauth2/callback}
+      OAUTH2_PROXY_UPSTREAMS: http://app:8000/
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_SKIP_AUTH_ROUTES: ^/health$
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+    restart: unless-stopped

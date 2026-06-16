@@ -1,0 +1,65 @@
+[project]
+name = "cto"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.30",
+    "qdrant-client>=1.12",
+    "fastembed>=0.4",
+    "pymupdf>=1.24",
+    "watchdog>=4.0",
+    "gradio>=4.40",
+    "tiktoken>=0.7",
+    "python-dotenv>=1.0",
+    "tree-sitter>=0.23",
+    "tree-sitter-java>=0.23",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-javascript>=0.23",
+    "tree-sitter-go>=0.23",
+    "tree-sitter-typescript>=0.23",
+    "tree-sitter-cpp>=0.23",
+    "tree-sitter-rust>=0.23",
+    "tree-sitter-hcl>=1.2",
+    "sentence-transformers>=3.0",
+    "torch>=2.0",
+    "langgraph>=0.2.50",
+    "langgraph-checkpoint-postgres>=2.0",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    "psycopg[binary,pool]>=3.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sse-starlette>=2.1",
+    "tavily-python>=0.5",
+    "arize-phoenix-otel>=0.6",
+    "openinference-instrumentation-langchain>=0.1.30",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+    "rich>=13.7",
+    "prompt_toolkit>=3.0",
+    "langchain-mcp-adapters>=0.1",
+    "mcp>=1.2",
+    "nest-asyncio>=1.6",
+]
+
+[project.scripts]
+cto = "rag.api.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest", "ipython"]
+# Phase 10 — binary CLI build (`make binary`). PyInstaller is the
+# only added dep; the rest is stdlib + the existing CLI deps.
+binary = ["pyinstaller>=6.0"]
+# Thin remote CLI: `cto --remote http://host:8000` with zero ML deps.
+# Install on laptop:  pip install --no-deps -e . && pip install httpx rich prompt_toolkit
+client = ["httpx>=0.27", "rich>=13.7", "prompt_toolkit>=3.0"]
+# Image-attachment OCR fast-path. Needs the Tesseract binary too:
+#   macOS: brew install tesseract   ·   RHEL: dnf install tesseract
+# Vision fallback needs no extra deps (uses the LiteLLM gateway).
+ocr = ["pytesseract>=0.3.10", "pillow>=10.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Tests use hand-rolled check/section runners invoked via __main__;
+# pytest collects the module-level test_* funcs that exist.
+addopts = "-q"

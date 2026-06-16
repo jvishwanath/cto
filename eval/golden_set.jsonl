@@ -1,0 +1,5 @@
+{"question": "How does the auth service validate JWT tokens?", "expected_file": "acme-auth", "expected_keywords": ["jwt", "verify", "token"]}
+{"question": "What endpoint handles device enrollment?", "expected_file": "acme-auth", "expected_keywords": ["enroll", "controller", "endpoint"]}
+{"question": "How are certificates generated during enrollment?", "expected_file": "acme-auth", "expected_keywords": ["cert", "sign"]}
+{"question": "What is the health check endpoint?", "expected_file": "acme-auth", "expected_keywords": ["health"]}
+{"question": "How does the management API authenticate requests?", "expected_file": "acme-api", "expected_keywords": ["auth"]}

@@ -1,0 +1,27 @@
+# cto-ops — ops-script runtime for Phase 9 `exec:` jobs and
+# `sandbox.image: cto-ops` skills. Python + cloud CLIs; no
+# scanners (use cto-secaudit for that).
+
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl ca-certificates jq git unzip groff less \
+    && rm -rf /var/lib/apt/lists/*
+
+# AWS CLI v2
+RUN curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" \
+        -o /tmp/aws.zip \
+    && unzip -q /tmp/aws.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/aws /tmp/aws.zip
+
+# kubectl
+RUN curl -sSL -o /usr/local/bin/kubectl \
+        "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/$(dpkg --print-architecture)/kubectl" \
+    && chmod +x /usr/local/bin/kubectl
+
+RUN pip install --no-cache-dir \
+        boto3 requests tabulate pyyaml
+
+WORKDIR /repo
+ENTRYPOINT []

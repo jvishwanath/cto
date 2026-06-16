@@ -1,0 +1,112 @@
+# cto-secaudit:latest — sandbox image for security/dependency-audit
+# skills (Phase 7-B). Two layers of tooling:
+#
+#   PRE-BAKED (work offline, cover any stack):
+#     semgrep · trivy · gitleaks · tfsec · checkov · bandit ·
+#     pip-audit · osv-scanner
+#
+#   LANGUAGE TOOLCHAINS (so the skill can `npm audit`, `go install
+#   gosec`, `pip install <auditor>` at RUNTIME in persistent mode):
+#     python3+pip · node+npm · go · jdk+maven+gradle · cargo
+#
+# Stack-specific auditors (gosec, brakeman, bundler-audit, …) and
+# project deps (`npm install`, `pip install -r`) are installed by
+# the skill at runtime — they persist for ONE skill run.
+#
+# Build:  make sandbox-secaudit   (or: docker build -f $thisfile -t cto-secaudit:latest .)
+
+FROM python:3.12-slim-bookworm AS base
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    GOPATH=/go \
+    PATH=/usr/local/go/bin:/go/bin:/root/.cargo/bin:/usr/local/bin:$PATH
+
+ARG TARGETARCH
+
+# ── system deps + language toolchains ────────────────────────────
+COPY __init__.py *.cr[t] /usr/local/share/ca-certificates/
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git jq unzip tar xz-utils \
+        nodejs npm \
+        default-jdk-headless maven gradle \
+        ruby-full \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Go (Debian's package is too old for `go install …@latest`)
+ARG GO_VERSION=1.22.5
+RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${TARGETARCH:-amd64}.tar.gz" \
+    | tar -C /usr/local -xz \
+    && go version
+
+# Rust (minimal — for `cargo audit` if a skill wants it)
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal \
+    && /root/.cargo/bin/cargo --version
+
+# ── cross-stack scanners (Python-installable) ────────────────────
+RUN pip install --no-cache-dir \
+        semgrep \
+        bandit \
+        checkov \
+        pip-audit
+
+# ── cross-stack scanners (binary releases) ───────────────────────
+# Asset names verified against each project's GitHub releases API
+# (they each name arm64 differently: ARM64 / arm64 / arm64).
+ARG TRIVY_VERSION=0.71.0
+ARG TFSEC_VERSION=1.28.14
+ARG GITLEAKS_VERSION=8.30.1
+ARG OSV_VERSION=2.3.8
+
+RUN set -eux; \
+    arch="${TARGETARCH:-amd64}"; \
+    case "$arch" in \
+      amd64) trv=64bit;  tfs=amd64; glk=x64;   osv=amd64;; \
+      arm64) trv=ARM64;  tfs=arm64; glk=arm64; osv=arm64;; \
+      *) echo "unsupported arch $arch"; exit 1;; esac; \
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-${trv}.tar.gz" \
+      | tar -xz -C /usr/local/bin trivy; \
+    curl -fsSL "https://github.com/aquasecurity/tfsec/releases/download/v${TFSEC_VERSION}/tfsec-linux-${tfs}" \
+      -o /usr/local/bin/tfsec && chmod +x /usr/local/bin/tfsec; \
+    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_${glk}.tar.gz" \
+      | tar -xz -C /usr/local/bin gitleaks; \
+    curl -fsSL "https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_${osv}" \
+      -o /usr/local/bin/osv-scanner && chmod +x /usr/local/bin/osv-scanner; \
+    trivy --version; tfsec --version; gitleaks version; osv-scanner --version
+
+# ── offline rule/db priming (best-effort; failures don't break build) ─
+# Lets `network: false` skills still get useful results from the
+# scanners that cache rules. Repeated builds reuse the layer.
+RUN semgrep --config=p/ci --metrics=off --dryrun /tmp || true
+RUN trivy image --download-db-only --cache-dir /root/.cache/trivy || true
+
+# ── self-test entrypoint ─────────────────────────────────────────
+# `docker run --rm cto-secaudit` prints every tool's version so the
+# skill's Phase-0 "what's available" check is one command.
+RUN cat > /usr/local/bin/secaudit-versions <<'SH' && \
+    chmod +x /usr/local/bin/secaudit-versions
+#!/bin/sh
+set +e
+ver() {
+  command -v "$1" >/dev/null 2>&1 || { echo "(missing)"; return; }
+  case "$1" in
+    go)     go version ;;
+    java)   java -version 2>&1 ;;
+    gradle) gradle --version 2>&1 | grep -m1 Gradle ;;
+    tfsec)  tfsec --version 2>&1 | grep -m1 . ;;
+    *)      "$1" --version 2>&1 ;;
+  esac | head -1
+}
+for t in python3 pip node npm go cargo java mvn gradle ruby \
+         semgrep bandit checkov pip-audit \
+         trivy gitleaks tfsec osv-scanner; do
+  printf "%-14s %s\n" "$t" "$(ver "$t")"
+done
+SH
+
+WORKDIR /work
+CMD ["secaudit-versions"]

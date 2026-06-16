@@ -1,0 +1,31 @@
+# Confluence connector config.
+# Copy to confluence.yaml (gitignored) and set CONFLUENCE_TOKEN in .env.
+# ${VAR} is expanded from the environment at load time — keep tokens
+# out of this file. The scheduler thread auto-starts when
+# confluence.yaml exists; disable with CONFLUENCE_ENABLED=false.
+#
+# Data Center: Personal Access Token (Profile → Personal Access
+#   Tokens) → Bearer auth. auth.type auto-detects to "dc".
+# Cloud:       email + API token → Basic auth. Set base_url to
+#   *.atlassian.net/wiki and uncomment auth.user.
+
+base_url: https://confluence.example.com
+
+auth:
+  # type: dc | cloud   (auto-detected from base_url if omitted)
+  token: ${CONFLUENCE_TOKEN}
+  # user: ${CONFLUENCE_USER}     # Cloud only
+
+sync_interval_hours: 24
+
+# Set false if behind a TLS-inspecting proxy and its root CA
+# isn't in certifi's bundle (or set REQUESTS_CA_BUNDLE /
+# SSL_CERT_FILE instead).
+verify_ssl: true
+
+spaces:
+  - key: ENG
+  # - key: ARCH
+  #   label_filter: [public, design]   # only pages with ANY of these labels
+  # - key: RUNBOOK
+  #   include_archived: false

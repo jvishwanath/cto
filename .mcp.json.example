@@ -1,0 +1,55 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "subagent_visible": false,
+      "confirm_writes": true
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "/tmp/example.db"],
+      "confirm_writes": true
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "github": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "ghcr.io/github/github-mcp-server"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "allowed_tools": [
+        "search_repositories", "get_file_contents",
+        "list_pull_requests", "get_pull_request",
+        "list_issues", "get_issue", "create_issue", "add_issue_comment"
+      ],
+      "confirm_writes": true,
+      "subagent_visible": false,
+      "enabled": false
+    },
+    "remote-http": {
+      "url": "https://mcp.example.com/mcp",
+      "transport": "streamable_http",
+      "headers": {
+        "Authorization": "Bearer ${MCP_REMOTE_TOKEN}"
+      },
+      "timeout_ms": 30000,
+      "enabled": false
+    }
+  }
+}

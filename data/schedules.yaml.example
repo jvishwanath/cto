@@ -1,0 +1,35 @@
+# Phase 9 — scheduled jobs. Copy to data/schedules.yaml to enable.
+# Each job: name + (cron|interval_min) + (skill|query|exec).
+# `repos: "*"` = every indexed repo. on_complete ∈ {index, diff_prev, notify}.
+
+jobs:
+  - name: nightly-secaudit
+    cron: "0 2 * * *"            # 02:00 daily
+    skill: security-audit
+    repos: [example-svc-a, example-svc-b]
+    on_complete: [diff_prev, notify]
+    notify: slack://#sec-alerts
+    headless_answers:
+      "Open a fix PR": "CRITICAL only"
+    timeout_sec: 3000
+
+  - name: weekly-deps
+    cron: "0 6 * * 0"            # Mon 06:00 (Python weekday 0=Mon)
+    skill: dependency-audit
+    repos: "*"
+    on_complete: [diff_prev]
+
+  - name: hourly-question
+    interval_min: 60
+    query: "any new CRITICAL findings since the last audit?"
+    on_complete: [notify]
+    notify: log://
+
+  - name: daily-ec2-cost
+    cron: "0 9 * * *"
+    exec: scripts/jobs/ec2_cost.py
+    exec_mode: sandbox           # or: host (requires CTO_SCHED_HOST_EXEC=true)
+    exec_image: cto-ops:latest
+    env_passthrough: [AWS_PROFILE, AWS_DEFAULT_REGION]
+    on_complete: [notify]
+    notify: slack://#cloud-cost
