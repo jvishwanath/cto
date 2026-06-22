@@ -11,6 +11,8 @@ TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 REPOS_DIR = os.environ.get("REPOS_DIR", str((__import__("pathlib").Path(__file__).parents[2] / "data" / "repos")))
 WORKTREES_DIR = os.environ.get("WORKTREES_DIR", str((__import__("pathlib").Path(__file__).parents[2] / "data" / "superdev")))
 
+VECTOR_DIM = int(os.environ.get("VECTOR_DIM", "1024"))
+
 # Phase 8 — code mutation. Default OFF: the superdev graph isn't even
 # importable in the read-only graph; enabling this is a deliberate
 # operator decision per-host.
@@ -61,9 +63,21 @@ MODELS = {
     "vision": "gpt-5",  # vision-capable; reads image attachments
 }
 
+# MODELS = {
+#     "embed": "text-embedding-nomic-embed-text-v1.5",
+#     "router": "qwen2.5-coder-7b-instruct-mlx",
+#     "agent": "qwen2.5-coder-7b-instruct-mlx",
+#     "agent_heavy": "qwen2.5-coder-7b-instruct-mlx",
+#     "fast": "qwen2.5-coder-7b-instruct-mlx",
+#     "vision": "qwen2.5-coder-7b-instruct-mlx",  # vision-capable; reads image attachments
+# }
+
 # Image attachments (Phase 6+). OCR fast-path → vision fallback.
 OCR_ENABLED = os.environ.get("OCR_ENABLED", "true").lower() == "true"
 VISION_FALLBACK = os.environ.get("VISION_FALLBACK", "true").lower() == "true"
 # Below this many usable chars, OCR is deemed insufficient → escalate
 # to the vision model (likely a diagram, not a text screenshot).
 OCR_MIN_CHARS = int(os.environ.get("OCR_MIN_CHARS", "24"))
+
+# Guardrails (Phase 4.5). Set OFF_TOPIC_CHECK_ENABLED=false to bypass out-of-domain checks.
+OFF_TOPIC_CHECK_ENABLED = os.environ.get("OFF_TOPIC_CHECK_ENABLED", "true").lower() == "true"

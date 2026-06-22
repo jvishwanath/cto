@@ -119,8 +119,8 @@ fixtures:
 	@echo "✓ fixtures ready — run 'make index-all' then 'make test'"
 
 # Phase 0: Naive indexing
-index:
-	$(PY) scripts/legacy/index_repos.py
+# index:
+# 	$(PY) scripts/legacy/index_repos.py
 
 # Phase 1: AST-aware + hybrid indexing
 index-v1:

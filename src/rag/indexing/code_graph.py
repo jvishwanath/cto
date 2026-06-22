@@ -376,9 +376,13 @@ def index_repo_graph(repo_path: Path, repo_name: str, extensions: set[str]) -> t
         ext = fpath.suffix.lower()
         if ext not in _CALL_PATTERNS:
             continue
-        if any(part.startswith(".") for part in fpath.relative_to(repo_path).parts):
+        rel_parts = fpath.relative_to(repo_path).parts
+        if any(part.startswith(".") for part in rel_parts):
             continue
-        if any(p in fpath.parts for p in ("vendor", "node_modules", "build", "target")):
+        _SKIP = {"vendor", "node_modules", "build", "target", "dist",
+                 ".venv", "venv", "data", ".git", ".pytest_cache", "__pycache__",
+                 "Pods", "pods", ".gradle", ".dart_tool", ".pub-cache"}
+        if any(p in _SKIP for p in rel_parts):
             continue
 
         try:

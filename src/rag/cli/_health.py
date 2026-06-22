@@ -99,9 +99,12 @@ def probe_llm_gateway(url: str, api_key: str = "",
 # ── Qdrant ───────────────────────────────────────────────────────────
 
 def probe_qdrant(url: str, timeout: float = 5.0) -> HealthResult:
-    """GET <qdrant>/healthz."""
-    if not url or url == "bundled":
-        return HealthResult(False, "bundled (not yet started)")
+    """GET <qdrant>/healthz. `url='bundled'` resolves to the
+    conventional localhost endpoint `cto compose up` provides."""
+    if not url:
+        return HealthResult(False, "no URL")
+    if url == "bundled":
+        url = "http://localhost:6333"
     return _http_get(url.rstrip("/") + "/healthz", timeout=timeout)
 
 
@@ -110,9 +113,12 @@ def probe_qdrant(url: str, timeout: float = 5.0) -> HealthResult:
 def probe_postgres(url: str, timeout: float = 5.0) -> HealthResult:
     """`psql -c 'SELECT 1'` via the psql binary if available; falls
     back to a TCP open-port check so we don't require psycopg in the
-    thin-client binary."""
-    if not url or url == "bundled":
-        return HealthResult(False, "bundled (not yet started)")
+    thin-client binary. `url='bundled'` resolves to the conventional
+    `postgresql://rag:rag@localhost:5432/rag` DSN compose brings up."""
+    if not url:
+        return HealthResult(False, "no URL")
+    if url == "bundled":
+        url = "postgresql://rag:rag@localhost:5432/rag"
     if shutil.which("psql"):
         try:
             r = subprocess.run(

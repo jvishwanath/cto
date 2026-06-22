@@ -21,7 +21,7 @@ from qdrant_client.models import (
     IsEmptyCondition, MatchValue, PayloadField,
 )
 
-from ..config import QDRANT_URL
+from ..config import QDRANT_URL, VECTOR_DIM
 from ..embed import embed_query
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,6 @@ def seed_history_on_hit(graph, config: dict, query: str,
     except Exception:
         pass
 
-VECTOR_DIM = 1024
 CACHE_NS = uuid.UUID("c0ffee00-4f89-41d3-9a0c-0305e82c3302")
 
 _qdrant: QdrantClient | None = None

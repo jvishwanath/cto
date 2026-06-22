@@ -27,13 +27,17 @@ block_cipher = None
 repo_root = Path(SPECPATH).parent.resolve()
 src = repo_root / "src"
 
-# Entry point
-entry = str(src / "rag" / "api" / "cli.py")
+# Entry point — small wrapper that imports rag.api.cli as a
+# module rather than invoking cli.py as __main__. Required so
+# the relative imports inside main() (`from ..cli.setup ...`)
+# resolve to the proper package and don't ImportError.
+entry = str(repo_root / "packaging" / "cto_entry.py")
 
 # Hidden imports — PyInstaller's static analysis misses dynamic
 # imports inside our subcommand routing and inside prompt_toolkit
 # extensions. List them explicitly so the binary boots.
 hiddenimports = [
+    "rag.api.cli",
     "rag.cli",
     "rag.cli._config",
     "rag.cli._health",

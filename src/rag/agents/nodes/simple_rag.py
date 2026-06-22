@@ -11,6 +11,7 @@ from ..llm import llm
 from ..state import AgentState
 from ..verbosity import instruction as verbosity_instruction, resolve as verbosity_resolve
 from ...retrieval import cascade_search
+from ...config import OFF_TOPIC_CHECK_ENABLED
 
 log = logging.getLogger(__name__)
 
@@ -18,6 +19,8 @@ _SYSTEM = """You are a developer assistant. Answer the question using ONLY
 the provided code context. Every claim MUST be followed by a citation
 [SOURCE_N] referencing the numbered context block. If the context is
 insufficient to answer, say so explicitly — do not guess."""
+
+_SYSTEM_RELAXED = """You are a helpful assistant. If the question is about the provided code context, answer using ONLY the context and cite [SOURCE_N]. If the question is a general knowledge question unrelated to the code (and no code context is relevant), answer it directly from your general knowledge or parametric memory without refusing."""
 
 _agent_llm = llm("agent", temperature=0)
 
@@ -48,7 +51,7 @@ def simple_rag(state: AgentState) -> dict:
         context_parts.append(f"[SOURCE_{i}] ({label})\n{c['text']}")
     context = "\n\n---\n\n".join(context_parts)
 
-    sys = _SYSTEM
+    sys = _SYSTEM if OFF_TOPIC_CHECK_ENABLED else _SYSTEM_RELAXED
     if scope:
         names = ", ".join(scope) if isinstance(scope, list) else str(scope)
         sys += (f"\n\nThe question is scoped to: {names}. Refer to "

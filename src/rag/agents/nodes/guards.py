@@ -23,9 +23,12 @@ applied.
 import logging
 import re
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from pydantic import BaseModel, Field
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage, SystemMessage
 
 from ..state import AgentState
+from ..llm import llm
+from ...config import OFF_TOPIC_CHECK_ENABLED
 
 log = logging.getLogger(__name__)
 
@@ -119,10 +122,27 @@ def detect_jailbreak(text: str) -> str | None:
 
 # ── Nodes ────────────────────────────────────────────────────────────
 
+class DomainGrade(BaseModel):
+    is_on_domain: bool = Field(
+        description=(
+            "True if the query is strictly about software engineering, "
+            "programming, repositories, codebases, APIs, database schemas, "
+            "computer science algorithms, data structures, or technical documentation. "
+            "False if it is about sports, general news, politics, general history, "
+            "hobbies, recipes, or casual chit-chat."
+        )
+    )
+
+_domain_classifier = llm("router", temperature=0).with_structured_output(DomainGrade)
+
+
 def input_guard(state: AgentState) -> dict:
     query = (state.get("query") or "").strip()
     if not query:
         return {"guard_flags": {}}
+
+    history = state.get("messages", [])
+    has_history = len(history) > 1
 
     flags: dict = {}
 
@@ -135,8 +155,25 @@ def input_guard(state: AgentState) -> dict:
     blocked: str | None = None
     if (jb := detect_jailbreak(redacted)):
         blocked = f"prompt-injection pattern: {jb!r}"
-    elif _OFFTOPIC_RE.search(redacted):
+    elif OFF_TOPIC_CHECK_ENABLED and _OFFTOPIC_RE.search(redacted):
         blocked = "off-topic for this code-RAG system"
+    elif OFF_TOPIC_CHECK_ENABLED and not has_history:
+        # LLM-as-a-Judge semantic domain check
+        try:
+            grade: DomainGrade = _domain_classifier.invoke([
+                SystemMessage(content=(
+                    "You are a strict input guardrail for a code-RAG system. "
+                    "Determine if the user's query is about software engineering, "
+                    "programming, codebase architecture, computer science algorithms, "
+                    "or databases. Return is_on_domain=False for general knowledge, "
+                    "geopolitics, general news, sports, history, recipes, or casual chat."
+                )),
+                HumanMessage(content=redacted)
+            ])
+            if not grade.is_on_domain:
+                blocked = "generic or out-of-domain query"
+        except Exception as e:
+            log.warning("[input_guard] LLM classification failed (%s); falling back to regex", e)
 
     delta: dict = {}
     if blocked:
@@ -212,7 +249,7 @@ def output_guard(state: AgentState) -> dict:
     weak_retrieval = bool(chunks) and max_score < ABSTAIN_THRESHOLD and not skip_band
     cites_chunks = bool(_INLINE_CITE_RE.search(answer))
 
-    if weak_retrieval and (cites_chunks or not answer):
+    if OFF_TOPIC_CHECK_ENABLED and weak_retrieval and (cites_chunks or not answer):
         # Answer is grounded in weak chunks (or there's no answer) →
         # confabulation risk → abstain.
         flags["abstained"] = True
@@ -226,7 +263,7 @@ def output_guard(state: AgentState) -> dict:
             "guard_flags": flags,
         }
 
-    if weak_retrieval and answer and not cites_chunks:
+    if OFF_TOPIC_CHECK_ENABLED and weak_retrieval and answer and not cites_chunks:
         # Uncited general-knowledge answer over weak retrieval. Two
         # bands by relatedness (approach A): domain-adjacent keeps a
         # softer note; off-domain flags it as unrelated. Either way

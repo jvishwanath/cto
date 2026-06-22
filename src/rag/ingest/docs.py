@@ -11,20 +11,21 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance, VectorParams, SparseVectorParams, SparseIndexParams, Modifier,
     PointStruct, Filter, FieldCondition, MatchValue, FilterSelector,
+    TurboQuantization, TurboQuantQuantizationConfig, TurboQuantBitSize
 )
 
-from ..config import QDRANT_URL, REPOS_DIR
+DOCS_COLLECTION = "docs"
+
+from ..config import QDRANT_URL, REPOS_DIR, VECTOR_DIM
 from ..embed import embed_texts
 from ..chunking.markdown import chunk_markdown_file
 from ..retrieval.hybrid import sparse_doc
 from .pdf import pdf_to_markdown, page_for_line
 from .symbol_mentions import extract_mentions, repos_for_mentions
 
-DOCS_COLLECTION = "docs"
 DOCS_DIR = Path(os.environ.get(
     "DOCS_DIR", str(Path(__file__).parents[3] / "data" / "docs")
 ))
-VECTOR_DIM = 1024
 _POINT_NS = uuid.UUID("9c1b6f5a-3e3f-4f9b-9c8d-1a2b3c4d5e6f")
 _DOC_EXTS = {".pdf", ".md", ".markdown", ".txt"}
 
@@ -50,6 +51,12 @@ def ensure_docs_collection(recreate: bool = False) -> None:
                 index=SparseIndexParams(on_disk=False),
                 modifier=Modifier.IDF,
             )},
+            quantization_config=TurboQuantization(
+                turbo=TurboQuantQuantizationConfig(
+                    bits=TurboQuantBitSize.BITS4,
+                    always_ram=True
+                )
+            ),
         )
 
 

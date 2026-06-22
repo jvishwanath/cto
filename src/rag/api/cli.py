@@ -1077,14 +1077,33 @@ def main():
     graph = None
     if not remote:
         os.environ.setdefault("UI_ENABLED", "false")
-        from ..agents.graph import get_app
-        from ..tracing import init_tracing
+        # Heavy in-process imports — gracefully degrade when the
+        # thin-client binary lacks the agent stack. PyInstaller's
+        # excludes drop torch/langgraph/qdrant_client/psycopg etc;
+        # bare `cto` (no --remote) would otherwise crash with a raw
+        # ModuleNotFoundError traceback.
+        try:
+            from ..agents.graph import get_app
+            from ..tracing import init_tracing
+        except ImportError as e:
+            print(
+                "cto: in-process chat requires the full Python install.\n"
+                "\n"
+                "  Options:\n"
+                "    cto --remote <server-url>           # use a CTO server\n"
+                "    pip install -e . (from source)      # local in-process mode\n"
+                "\n"
+                f"  (this binary is thin-client only — missing module: "
+                f"{e.name})",
+                file=sys.stderr)
+            sys.exit(2)
         init_tracing(quiet=True)
         graph = get_app()
         # FastAPI lifespan only fires for `make serve`. For `make chat`
         # we need to drive MCP startup ourselves so the superdev
         # toolset includes MCP tools / resources / prompts. Fail-soft:
-        # a broken .mcp.json doesn't sink the CLI.
+        # a broken .mcp.json (or missing mcp module in thin binary)
+        # doesn't sink the CLI.
         try:
             import asyncio as _asyncio
             from ..mcp.client import connect_all as _mcp_connect

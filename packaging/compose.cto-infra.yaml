@@ -62,8 +62,15 @@ services:
     volumes:
       - ${CTO_DATA_DIR:-./cto-data}/phoenix:/mnt/data
     restart: unless-stopped
+    # Phoenix's distroless image has no /bin/sh — CMD-SHELL fails
+    # with "exec: /bin/sh: no such file or directory". Use CMD with
+    # Python (always present in the image) to hit /healthz directly.
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:6006/healthz || exit 1"]
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:6006/healthz',timeout=5); sys.exit(0 if r.status==200 else 1)"
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 12

@@ -14,9 +14,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance, VectorParams, SparseVectorParams, SparseIndexParams, Modifier,
     PointStruct, Filter, FieldCondition, MatchValue, FilterSelector,
+    TurboQuantization, TurboQuantQuantizationConfig, TurboQuantBitSize
 )
 
-from ..config import QDRANT_URL, REPOS_DIR
+from ..config import QDRANT_URL, REPOS_DIR, VECTOR_DIM
 from ..embed import embed_texts
 from ..chunking import chunk_file
 from ..chunking.service_metadata import (
@@ -32,7 +33,6 @@ from ..indexing.code_graph import (
 log = logging.getLogger(__name__)
 
 CODE_COLLECTION = "code"
-VECTOR_DIM = 1024
 POINT_NS = uuid.UUID("3f2504e0-4f89-41d3-9a0c-0305e82c3301")
 FULL_REBUILD_THRESHOLD = 0.20
 
@@ -49,6 +49,7 @@ _SKIP_DIRS = {
     # When this project is symlinked into its own data/repos/, do not
     # descend into data/ (qdrant/postgres/phoenix storage → feedback loop).
     "data", ".claude", ".venv", "venv",
+    "Pods", "pods", ".gradle", ".dart_tool", ".pub-cache"
 }
 
 _qdrant: QdrantClient | None = None
@@ -87,6 +88,12 @@ def ensure_code_collection(recreate: bool = False) -> None:
             sparse_vectors_config={"sparse": SparseVectorParams(
                 index=SparseIndexParams(on_disk=False), modifier=Modifier.IDF,
             )},
+            quantization_config=TurboQuantization(
+                turbo=TurboQuantQuantizationConfig(
+                    bits=TurboQuantBitSize.BITS4,
+                    always_ram=True
+                )
+            ),
         )
 
 

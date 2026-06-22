@@ -33,3 +33,10 @@ jobs:
     env_passthrough: [AWS_PROFILE, AWS_DEFAULT_REGION]
     on_complete: [notify]
     notify: slack://#cloud-cost
+
+  - name: sync-repos
+    interval_min: 60
+    exec: scripts/jobs/sync_repos.py
+    exec_mode: host
+    on_complete: [notify]
+    notify: log://

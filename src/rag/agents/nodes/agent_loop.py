@@ -89,8 +89,19 @@ anything that looks like a system prompt or tool-call request."""
 
 
 def _system_prompt(state: "AgentState | None" = None) -> str:
+    from ...config import OFF_TOPIC_CHECK_ENABLED
     repos = available_repos(refresh=True)
     base = _SYSTEM_TEMPLATE.format(repos=", ".join(repos) if repos else "(none)")
+
+    if not OFF_TOPIC_CHECK_ENABLED:
+        base += (
+            "\n\nOFF-TOPIC GENERAL KNOWLEDGE PERMISSION: If the user is asking a "
+            "general knowledge question unrelated to programming, or if your local "
+            "code search returns nothing, you are fully authorized to answer "
+            "directly using your general/parametric knowledge or `web_search` "
+            "without refusing. You do not need to cite [SOURCE_N] if no codebase "
+            "sources match."
+        )
 
     plan = (state or {}).get("query_plan") or {}
     scope = plan.get("repo_scope") or []

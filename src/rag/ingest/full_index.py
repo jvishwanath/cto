@@ -19,9 +19,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance, VectorParams, SparseVectorParams, SparseIndexParams,
     Modifier, PointStruct,
+    TurboQuantization, TurboQuantQuantizationConfig, TurboQuantBitSize
 )
 
-from ..config import QDRANT_URL, REPOS_DIR
+from ..config import QDRANT_URL, REPOS_DIR, VECTOR_DIM
 from ..embed import embed_texts
 from ..chunking import chunk_file
 from ..chunking.service_metadata import (
@@ -30,7 +31,6 @@ from ..chunking.service_metadata import (
 from ..retrieval.hybrid import sparse_doc
 
 COLLECTION = "code"
-VECTOR_DIM = 1024
 POINT_NS = uuid.UUID("3f2504e0-4f89-41d3-9a0c-0305e82c3301")
 
 CODE_EXTENSIONS = {
@@ -41,8 +41,11 @@ CODE_EXTENSIONS = {
     ".md", ".txt", ".dockerfile", ".gradle", ".xml", ".properties",
 }
 # .terraform/ holds provider mirrors + modules — vendored, skip.
-_SKIP_PARTS = {"vendor", "node_modules", "build", "target", "dist",
-               ".terraform"}
+_SKIP_PARTS = {
+    "vendor", "node_modules", "build", "target", "dist", ".terraform",
+    ".venv", "venv", "data", ".git", ".pytest_cache", "__pycache__",
+    "Pods", "pods", ".gradle", ".dart_tool", ".pub-cache"
+}
 
 
 def chunk_id(repo: str, filepath: str, idx: int) -> str:
@@ -62,7 +65,7 @@ def collect_repo_chunks(repo_path: Path) -> list[dict]:
         rel_parts = fpath.relative_to(repo_path).parts
         if any(p.startswith(".") for p in rel_parts):
             continue
-        if any(p in _SKIP_PARTS for p in fpath.parts):
+        if any(p in _SKIP_PARTS for p in rel_parts):
             continue
         try:
             text = fpath.read_text(encoding="utf-8", errors="ignore")
@@ -117,13 +120,22 @@ def ensure_collection(qdrant: QdrantClient, name: str = COLLECTION,
                     modifier=Modifier.IDF,
                 ),
             },
+            quantization_config=TurboQuantization(
+                turbo=TurboQuantQuantizationConfig(
+                    bits=TurboQuantBitSize.BITS4,
+                    always_ram=True
+                )
+            ),
         )
 
 
 def upsert_chunks(qdrant: QdrantClient, chunks: list[dict],
-                  collection: str = COLLECTION, batch_size: int = 64,
+                  collection: str = COLLECTION, batch_size: int | None = None,
                   progress: bool = False) -> int:
     """Embed and upsert chunks. Sparse via Qdrant server-side BM25."""
+    import os
+    if batch_size is None:
+        batch_size = int(os.environ.get("EMBED_BATCH_SIZE", "8"))
     n = 0
     total = (len(chunks) + batch_size - 1) // batch_size
     for i in range(0, len(chunks), batch_size):
